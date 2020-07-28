@@ -1,6 +1,70 @@
+{-------------------------------------------------------------------------------
+
+  This Source Code Form is subject to the terms of the Mozilla Public
+  License, v. 2.0. If a copy of the MPL was not distributed with this
+  file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+-------------------------------------------------------------------------------}
+{===============================================================================
+
+  Simple Named Values
+
+    This library provides a class that implements a list of name-value pairs.
+
+    It is intended for passing data to objects or functions when the type and
+    amount of data cannot be known at compile-time. It is similar to passing
+    an array of variants, but is more structured and reliable, as the data do
+    not need to be ordered.
+    It should NOT be used for long-term data storage or when the data are
+    frequently accessed (access is not optimized for speed).
+
+    Only some basic types are implemented, but by using typecasting and dynamic
+    memory allocation, practically any data can be stored.
+
+    Typical use should be following:
+
+      - create an instance of TSimpleNamedValues
+      - fill it with required data
+      - pass it to function/class that requires this data
+      - the function/class should copy the passed data to a local storage
+        and/or use them as needed
+      - upon return from the function/method, free the instance and with it the
+        data
+
+  Version 1.0 (2020-07-28)
+
+  Last change 2020-07-28
+
+  ©2020 František Milt
+
+  Contacts:
+    František Milt: frantisek.milt@gmail.com
+
+  Support:
+    If you find this code useful, please consider supporting its author(s) by
+    making a small donation using the following link(s):
+
+      https://www.paypal.me/FMilt
+
+  Changelog:
+    For detailed changelog and history please refer to this git repository:
+
+      github.com/TheLazyTomcat/Lib.SimpleNamedValues
+
+  Dependencies:
+    AuxTypes   - github.com/TheLazyTomcat/Lib.AuxTypes
+    AuxClasses - github.com/TheLazyTomcat/Lib.AuxClasses
+
+===============================================================================}
 unit SimpleNamedValues;
 
 interface
+
+{$IFDEF FPC}
+  {$MODE ObjFPC}{$H+}
+  {$DEFINE FPC_DisableWarns}
+  {$MACRO ON}
+{$ENDIF}
 
 uses
   SysUtils,
@@ -122,6 +186,11 @@ type
   end;
 
 implementation
+
+{$IFDEF FPC_DisableWarns}
+  {$DEFINE FPCDWM}
+  {$DEFINE W5024:={$WARN 5024 OFF}} // Parameter "$1" not used
+{$ENDIF}
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -374,10 +443,12 @@ end;
 
 //------------------------------------------------------------------------------
 
+{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
 procedure TSimpleNamedValues.SetCount(Value: Integer);
 begin
 // do nothing
 end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 
