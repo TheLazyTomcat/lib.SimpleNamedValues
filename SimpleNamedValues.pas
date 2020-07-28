@@ -4,7 +4,7 @@ interface
 
 uses
   SysUtils,
-  AuxTypes, AuxClasses;
+  AuxClasses;
 
 type
   ESNVException = class(Exception);
@@ -20,13 +20,13 @@ type
                                TSimpleNamedValues
 --------------------------------------------------------------------------------
 ===============================================================================}
-
 type
   TSNVNamedValueType = (nvtBool,nvtInteger,nvtInt64,nvtFloat,nvtDateTime,
                         nvtCurrency,nvtText,nvtPointer);
 
   TSNVNamedValue = record
-    Name: String;
+    Name:     String;
+    Changed:  Boolean;  // internal field
     case ValueType: TSNVNamedValueType of
       nvtBool:     (BoolValue:      Boolean);
       nvtInteger:  (IntegerValue:   Integer);
@@ -34,7 +34,7 @@ type
       nvtFloat:    (FloatValue:     Extended);
       nvtDateTime: (DateTimeValue:  TDateTime);
       nvtCurrency: (CurrencyValue:  Currency);
-      nvtText:     (TextValue:    PChar);
+      nvtText:     (TextValue:      PChar);
       nvtPointer:  (PointerValue:   Pointer)
   end;
 
@@ -46,6 +46,8 @@ type
   private
     fValues:                array of TSNVNamedValue;
     fCount:                 Integer;
+    fUpdateCounter:         Integer;
+    fChanged:               Boolean;
     fOnChangeEvent:         TNotifyEvent;
     fOnChangeCallback:      TNotifyCallback;
     fOnValueChangeEvent:    TIntegerEvent;
@@ -85,6 +87,8 @@ type
   public
     constructor Create;
     destructor Destroy; override;
+    procedure BeginUpdate; virtual;
+    procedure EndUpdate; virtual;
     Function LowIndex: Integer; override;
     Function HighIndex: Integer; override;
     Function IndexOf(const Name: String): Integer; overload; virtual;
@@ -99,6 +103,7 @@ type
     procedure Delete(Index: Integer); virtual;
     procedure Clear; virtual;
     property Values[Index: Integer]: TSNVNamedValue read GetValue; default;
+    // values access
     property BoolValue[const Name: String]: Boolean read GetBoolValue write SetBoolValue;
     property IntegerValue[const Name: String]: Integer read GetIntegerValue write SetIntegerValue;
     property Int64Value[const Name: String]: Int64 read GetInt64Value write SetInt64Value;
@@ -106,7 +111,8 @@ type
     property DateTimeValue[const Name: String]: TDateTime read GetDateTimeValue write SetDateTimeValue;
     property CurrencyValue[const Name: String]: Currency read GetCurrencyValue write SetCurrencyValue;
     property TextValue[const Name: String]: String read GetTextValue write SetTextValue;
-    property PointerValue[const Name: String]: Pointer read GetPointerValue write SetPointerValue; 
+    property PointerValue[const Name: String]: Pointer read GetPointerValue write SetPointerValue;
+    // events, callbacks
     property OnChange: TNotifyEvent read fOnChangeEvent write fOnChangeEvent;
     property OnChangeEvent: TNotifyEvent read fOnChangeEvent write fOnChangeEvent;
     property OnChangeCallback: TNotifyCallback read fOnChangeCallback write fOnChangeCallback;
@@ -154,8 +160,12 @@ end;
 //------------------------------------------------------------------------------
 
 procedure TSimpleNamedValues.SetBoolValue(const Name: String; Value: Boolean);
+var
+  Index:  Integer;
 begin
-fValues[PrepareValue(Name,nvtBool)].BoolValue := Value;
+Index := PrepareValue(Name,nvtBool);
+fValues[Index].BoolValue := Value;
+DoValueChange(Index);
 end;
 
 //------------------------------------------------------------------------------
@@ -173,8 +183,12 @@ end;
 //------------------------------------------------------------------------------
 
 procedure TSimpleNamedValues.SetIntegerValue(const Name: String; Value: Integer);
+var
+  Index:  Integer;
 begin
-fValues[PrepareValue(Name,nvtInteger)].IntegerValue := Value;
+Index := PrepareValue(Name,nvtInteger);
+fValues[Index].IntegerValue := Value;
+DoValueChange(Index);
 end;
 
 //------------------------------------------------------------------------------
@@ -192,8 +206,12 @@ end;
 //------------------------------------------------------------------------------
 
 procedure TSimpleNamedValues.SetInt64Value(const Name: String; Value: Int64);
+var
+  Index:  Integer;
 begin
-fValues[PrepareValue(Name,nvtInt64)].Int64Value := Value;
+Index := PrepareValue(Name,nvtInt64);
+fValues[Index].Int64Value := Value;
+DoValueChange(Index);
 end;
  
 //------------------------------------------------------------------------------
@@ -211,8 +229,12 @@ end;
 //------------------------------------------------------------------------------
 
 procedure TSimpleNamedValues.SetFloatValue(const Name: String; Value: Extended);
+var
+  Index:  Integer;
 begin
-fValues[PrepareValue(Name,nvtFloat)].FloatValue := Value;
+Index := PrepareValue(Name,nvtFloat);
+fValues[Index].FloatValue := Value;
+DoValueChange(Index);
 end;
   
 //------------------------------------------------------------------------------
@@ -230,8 +252,12 @@ end;
 //------------------------------------------------------------------------------
 
 procedure TSimpleNamedValues.SetDateTimeValue(const Name: String; Value: TDateTime);
+var
+  Index:  Integer;
 begin
-fValues[PrepareValue(Name,nvtDateTime)].DateTimeValue := Value;
+Index := PrepareValue(Name,nvtDateTime);
+fValues[Index].DateTimeValue := Value;
+DoValueChange(Index);
 end;
    
 //------------------------------------------------------------------------------
@@ -249,8 +275,12 @@ end;
 //------------------------------------------------------------------------------
 
 procedure TSimpleNamedValues.SetCurrencyValue(const Name: String; Value: Currency);
+var
+  Index:  Integer;
 begin
-fValues[PrepareValue(Name,nvtCurrency)].CurrencyValue := Value;
+Index := PrepareValue(Name,nvtCurrency);
+fValues[Index].CurrencyValue := Value;
+DoValueChange(Index);
 end;
 
 //------------------------------------------------------------------------------
@@ -268,13 +298,17 @@ end;
 //------------------------------------------------------------------------------
 
 procedure TSimpleNamedValues.SetTextValue(const Name: String; const Value: String);
+var
+  Index:  Integer;
 begin
-with fValues[PrepareValue(Name,nvtText)] do
+Index := PrepareValue(Name,nvtText);
+with fValues[Index] do
   begin
     If Assigned(TextValue) then
       StrDispose(TextValue);
-    TextValue := StrNew(PChar(Name));
+    TextValue := StrNew(PChar(Value));
   end;
+DoValueChange(Index);
 end;
 
 //------------------------------------------------------------------------------
@@ -292,8 +326,12 @@ end;
 //------------------------------------------------------------------------------
 
 procedure TSimpleNamedValues.SetPointerValue(const Name: String; Value: Pointer);
+var
+  Index:  Integer;
 begin
-fValues[PrepareValue(Name,nvtPointer)].PointerValue := Value;
+Index := PrepareValue(Name,nvtPointer);
+fValues[Index].PointerValue := Value;
+DoValueChange(Index);
 end;
 
 //------------------------------------------------------------------------------
@@ -314,12 +352,14 @@ If Value >= 0 then
     If Value <> Length(fValues) then
       begin
         If Value < fCount then
-          begin
-            For i := Value to HighIndex do
-              FinalizeNamedValue(fValues[i]);
-            fCount := Value;
-          end;
+          For i := Value to HighIndex do
+            FinalizeNamedValue(fValues[i]);
         SetLength(fValues,Value);
+        If Value < fCount then
+          begin
+            fCount := Value;
+            DoChange;
+          end;
       end;
   end
 else raise ESNVInvalidValue.CreateFmt('TSimpleNamedValues.SetCapacity: Invalid capacity value (%d).',[Value]);
@@ -343,20 +383,47 @@ end;
 
 procedure TSimpleNamedValues.DoChange;
 begin
-If Assigned(fOnChangeEvent) then
-  fOnChangeEvent(Self);
-If Assigned(fOnChangeCallback) then
-  fOnChangeCallback(Self);
+fChanged := True;
+If fUpdateCounter <= 0 then
+  begin
+    If Assigned(fOnChangeEvent) then
+      fOnChangeEvent(Self);
+    If Assigned(fOnChangeCallback) then
+      fOnChangeCallback(Self);
+  end
 end;
 
 //------------------------------------------------------------------------------
 
 procedure TSimpleNamedValues.DoValueChange(Index: Integer);
+var
+  i:  Integer;
 begin
-If Assigned(fOnValueChangeEvent) then
-  fOnValueChangeEvent(Self,Index);
-If Assigned(fOnValueChangeCallback) then
-  fOnValueChangeCallback(Self,Index);
+If CheckIndex(Index) then
+  begin
+    If fUpdateCounter <= 0 then
+      begin
+        If Assigned(fOnValueChangeEvent) then
+          fOnValueChangeEvent(Self,Index);
+        If Assigned(fOnValueChangeCallback) then
+          fOnValueChangeCallback(Self,Index);
+      end
+    else fValues[Index].Changed := True;
+  end
+else
+  begin
+    // report all changed values
+    If (fUpdateCounter <= 0) and (Assigned(fOnValueChangeEvent) or Assigned(fOnValueChangeCallback)) then
+      For i := LowIndex to HighIndex do
+        If fValues[i].Changed then
+          begin
+            If Assigned(fOnValueChangeEvent) then
+              fOnValueChangeEvent(Self,i);
+            If Assigned(fOnValueChangeCallback) then
+              fOnValueChangeCallback(Self,i);
+            fValues[i].Changed := False;
+          end;
+  end;
 end;
 
 //------------------------------------------------------------------------------
@@ -378,6 +445,7 @@ end;
 
 class procedure TSimpleNamedValues.InitializeNamedValue(var NamedValue: TSNVNamedValue);
 begin
+NamedValue.Name := '';
 FillChar(NamedValue,SizeOf(TSNVNamedValue),0);
 end;
 
@@ -385,9 +453,9 @@ end;
 
 class procedure TSimpleNamedValues.FinalizeNamedValue(var NamedValue: TSNVNamedValue);
 begin
+NamedValue.Name := '';
 If NamedValue.ValueType = nvtText then
   begin
-    NamedValue.Name := '';
     StrDispose(NamedValue.TextValue);
     NamedValue.TextValue := nil;
   end;
@@ -402,14 +470,49 @@ begin
 inherited Create;
 SetLength(fValues,0);
 fCount := 0;
+fUpdateCounter := 0;
+fChanged := False;
+fOnChangeEvent := nil;
+fOnChangeCallback := nil;
+fOnValueChangeEvent := nil;
+fOnValueChangeCallback := nil;
 end;
 
 //------------------------------------------------------------------------------
 
 destructor TSimpleNamedValues.Destroy;
 begin
+// prevent change reporting
+fOnChangeEvent := nil;
+fOnChangeCallback := nil;
+fOnValueChangeEvent := nil;
+fOnValueChangeCallback := nil;
 Clear;
 inherited;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSimpleNamedValues.BeginUpdate;
+begin
+If fUpdateCounter <= 0 then
+  fChanged := False;
+Inc(fUpdateCounter);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSimpleNamedValues.EndUpdate;
+begin
+Dec(fUpdateCounter);
+If fUpdateCounter <= 0 then
+  begin
+    fUpdateCounter := 0;
+    If fChanged then
+      DoChange;
+    DoValueChange(-1);  
+    fChanged := False;
+  end;
 end;
 
 //------------------------------------------------------------------------------
@@ -434,7 +537,7 @@ var
 begin
 Result := -1;
 For i := LowIndex to HighIndex do
-  If AnsiSameText(Name,fValues[Result].Name) then
+  If AnsiSameText(Name,fValues[i].Name) then
     begin
       Result := i;
       Break{For i};
@@ -479,6 +582,7 @@ If not Find(Name,Result) then
     fValues[fCount].ValueType := ValueType;
     Result := fCount;
     Inc(fCount);
+    DoChange;
   end
 else raise ESNVDuplicitValue.CreateFmt('TSimpleNamedValues.Add: Value "%s" already exists.',[Name]);
 end;
@@ -500,6 +604,7 @@ If not CheckIndex(IndexOf(Name)) then
         fValues[Index].Name := Name;
         fValues[Index].ValueType := ValueType;
         Inc(fCount);
+        DoChange;
       end
     else If Index = fCount then
       Add(Name,ValueType)
@@ -530,6 +635,7 @@ If SrcIdx <> DstIdx then
       For i := SrcIdx downto Succ(DstIdx) do
         fValues[i] := fValues[i - 1];
     fValues[DstIdx] := Temp;
+    DoChange;
   end;
 end;
 
@@ -548,6 +654,7 @@ If Idx1 <> Idx2 then
     Temp := fValues[Idx1];
     fValues[Idx1] := fValues[Idx2];
     fValues[Idx2] := Temp;
+    DoChange;
   end;
 end;
 
@@ -571,8 +678,10 @@ If CheckIndex(Index) then
     FinalizeNamedValue(fValues[Index]);
     For i := Index to Pred(HighIndex) do
       fValues[i] := fValues[i + 1];
+    fValues[HighIndex].Name := '';  // to be sure
     Dec(fCount);
     Shrink;
+    DoChange;
   end
 else raise ESNVIndexOutOfBounds.CreateFmt('TSimpleNamedValues.Delete: Index (%d) out of bounds.',[Index]);
 end;
@@ -587,6 +696,7 @@ For i := LowIndex to HighIndex do
   FinalizeNamedValue(fValues[i]);
 SetLength(fValues,0);
 fCount := 0;
+DoChange;
 end;
 
 end.
