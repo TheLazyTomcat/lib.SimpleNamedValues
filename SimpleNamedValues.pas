@@ -33,7 +33,7 @@
 
   Version 1.0 (2020-07-28)
 
-  Last change 2020-07-28
+  Last change 2020-08-02
 
   ©2020 František Milt
 
@@ -61,10 +61,11 @@ unit SimpleNamedValues;
 interface
 
 {$IFDEF FPC}
-  {$MODE ObjFPC}{$H+}
+  {$MODE ObjFPC}
   {$DEFINE FPC_DisableWarns}
   {$MACRO ON}
 {$ENDIF}
+{$H+}
 
 uses
   SysUtils,
