@@ -31,9 +31,23 @@
       - upon return from the function/method, free the instance and with it the
         data
 
-  Version 1.0 (2020-07-28)
+    Note on type nvtBuffer (general memory buffers):
 
-  Last change 2020-08-02
+      Values of this type are stored and accessed using structure TSNVBuffer
+      and are copy-on-assign.
+      When you assign buffer to a named value, it is not directly stored,
+      instead a copy is made and this copy is stored. This means you can then
+      free or otherwise invalidate the source.
+      When retrieving this value type, again a copy is made and this copy is
+      then returned. You have to free the returned buffer using function
+      FreeSNVBuffer after you are done using it.
+      Internal storage of the buffer is managed automatically but can be
+      directly accessed using properties BufferValueMemory and BufferValueSize
+      (both read-only).
+
+  Version 1.1 (2020-09-15)
+
+  Last change 2020-09-15
 
   ©2020 František Milt
 
@@ -69,7 +83,7 @@ interface
 
 uses
   SysUtils,
-  AuxClasses;
+  AuxTypes, AuxClasses;
 
 type
   ESNVException = class(Exception);
@@ -86,8 +100,17 @@ type
 --------------------------------------------------------------------------------
 ===============================================================================}
 type
+  TSNVBuffer = record
+    Memory: Pointer;
+    Size:   TMemSize;
+  end;
+
+Function SNVBuffer(Memory: Pointer; Size: TMemSize): TSNVBuffer;
+procedure FreeSNVBuffer(var Buffer: TSNVBuffer);
+
+type
   TSNVNamedValueType = (nvtBool,nvtInteger,nvtInt64,nvtFloat,nvtDateTime,
-                        nvtCurrency,nvtText,nvtPointer);
+                        nvtCurrency,nvtText,nvtPointer,nvtGUID,nvtBuffer);
 
   TSNVNamedValue = record
     Name:     String;
@@ -100,7 +123,9 @@ type
       nvtDateTime: (DateTimeValue:  TDateTime);
       nvtCurrency: (CurrencyValue:  Currency);
       nvtText:     (TextValue:      PChar);
-      nvtPointer:  (PointerValue:   Pointer)
+      nvtPointer:  (PointerValue:   Pointer);
+      nvtGUID:     (GUIDValue:      TGUID);
+      nvtBuffer:   (BufferValue:    TSNVBuffer)
   end;
 
 {===============================================================================
@@ -137,6 +162,12 @@ type
     procedure SetTextValue(const Name: String; const Value: String); virtual;
     Function GetPointerValue(const Name: String): Pointer; virtual;
     procedure SetPointerValue(const Name: String; Value: Pointer); virtual;
+    Function GetGUIDValue(const Name: String): TGUID; virtual;
+    procedure SetGUIDValue(const Name: String; Value: TGUID); virtual;
+    Function GetBufferValue(const Name: String): TSNVBuffer; virtual;
+    procedure SetBufferValue(const Name: String; Value: TSNVBuffer); virtual;
+    Function GetBufferValueMemory(const Name: String): Pointer; virtual;
+    Function GetBufferValueSize(const Name: String): TMemSize; virtual;
     // list methods
     Function GetCapacity: Integer; override;
     procedure SetCapacity(Value: Integer); override;
@@ -177,6 +208,10 @@ type
     property CurrencyValue[const Name: String]: Currency read GetCurrencyValue write SetCurrencyValue;
     property TextValue[const Name: String]: String read GetTextValue write SetTextValue;
     property PointerValue[const Name: String]: Pointer read GetPointerValue write SetPointerValue;
+    property GUIDValue[const Name: String]: TGUID read GetGUIDValue write SetGUIDValue;
+    property BufferValue[const Name: String]: TSNVBuffer read GetBufferValue write SetBufferValue;
+    property BufferValueMemory[const Name: String]: Pointer read GetBufferValueMemory;
+    property BufferValueSize[const Name: String]: TMemSize read GetBufferValueSize;
     // events, callbacks
     property OnChange: TNotifyEvent read fOnChangeEvent write fOnChangeEvent;
     property OnChangeEvent: TNotifyEvent read fOnChangeEvent write fOnChangeEvent;
@@ -198,6 +233,25 @@ implementation
                                TSimpleNamedValues
 --------------------------------------------------------------------------------
 ===============================================================================}
+{===============================================================================
+    TSimpleNamedValues - auxiliary functions
+===============================================================================}
+
+Function SNVBuffer(Memory: Pointer; Size: TMemSize): TSNVBuffer;
+begin
+Result.Memory := Memory;
+Result.Size := Size;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure FreeSNVBuffer(var Buffer: TSNVBuffer);
+begin
+FreeMem(Buffer.Memory,Buffer.Size);
+Buffer.Memory := nil;
+Buffer.Size := 0;
+end;
+
 {===============================================================================
     TSimpleNamedValues - class implementation
 ===============================================================================}
@@ -406,6 +460,87 @@ end;
 
 //------------------------------------------------------------------------------
 
+Function TSimpleNamedValues.GetGUIDValue(const Name: String): TGUID;
+var
+  Index:  Integer;
+begin
+If Find(Name,nvtGUID,Index) then
+  Result := fValues[Index].GUIDValue
+else
+  raise ESNVUnknownNamedValue.CreateFmt('TSimpleNamedValues.GetGUIDValue: Unknown guid value "%s".',[Name]);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSimpleNamedValues.SetGUIDValue(const Name: String; Value: TGUID);
+var
+  Index:  Integer;
+begin
+Index := PrepareValue(Name,nvtGUID);
+fValues[Index].GUIDValue := Value;
+DoValueChange(Index);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TSimpleNamedValues.GetBufferValue(const Name: String): TSNVBuffer;
+var
+  Index:  Integer;
+begin
+If Find(Name,nvtBuffer,Index) then
+  begin
+    Result.Size := fValues[Index].BufferValue.Size;
+    GetMem(Result.Memory,Result.Size);
+    System.Move(fValues[Index].BufferValue.Memory^,Result.Memory^,Result.Size);
+  end
+else raise ESNVUnknownNamedValue.CreateFmt('TSimpleNamedValues.GetBufferValue: Unknown buffer value "%s".',[Name]);
+end;
+
+
+//------------------------------------------------------------------------------
+
+procedure TSimpleNamedValues.SetBufferValue(const Name: String; Value: TSNVBuffer);
+var
+  Index:  Integer;
+begin
+Index := PrepareValue(Name,nvtBuffer);
+with fValues[Index] do
+  begin
+    If Assigned(BufferValue.Memory) then
+      FreeSNVBuffer(BufferValue);
+    BufferValue.Size := Value.Size;
+    GetMem(BufferValue.Memory,BufferValue.Size);
+    System.Move(Value.Memory^,BufferValue.Memory^,BufferValue.Size);
+  end;
+DoValueChange(Index);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TSimpleNamedValues.GetBufferValueMemory(const Name: String): Pointer;
+var
+  Index:  Integer;
+begin
+If Find(Name,nvtBuffer,Index) then
+  Result := fValues[Index].BufferValue.Memory
+else
+  raise ESNVUnknownNamedValue.CreateFmt('TSimpleNamedValues.GetBufferValueMemory: Unknown buffer value "%s".',[Name]);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TSimpleNamedValues.GetBufferValueSize(const Name: String): TMemSize;
+var
+  Index:  Integer;
+begin
+If Find(Name,nvtBuffer,Index) then
+  Result := fValues[Index].BufferValue.Size
+else
+  raise ESNVUnknownNamedValue.CreateFmt('TSimpleNamedValues.GetBufferValueSize: Unknown buffer value "%s".',[Name]);
+end;
+
+//------------------------------------------------------------------------------
+
 Function TSimpleNamedValues.GetCapacity: Integer;
 begin
 Result := Length(fValues);
@@ -531,6 +666,8 @@ If NamedValue.ValueType = nvtText then
     StrDispose(NamedValue.TextValue);
     NamedValue.TextValue := nil;
   end;
+If NamedValue.ValueType = nvtBuffer then
+  FreeSNVBuffer(NamedValue.BufferValue);
 end;
 
 {-------------------------------------------------------------------------------
