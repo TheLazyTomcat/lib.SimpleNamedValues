@@ -45,9 +45,9 @@
       directly accessed using properties BufferValueMemory and BufferValueSize
       (both read-only).
 
-  Version 1.1 (2020-09-15)
+  Version 1.2 (2020-09-20)
 
-  Last change 2020-09-15
+  Last change 2020-09-20
 
   ©2020 František Milt
 
@@ -191,6 +191,8 @@ type
     Function IndexOf(const Name: String; ValueType: TSNVNamedValueType): Integer; overload; virtual;
     Function Find(const Name: String; out Index: Integer): Boolean; overload; virtual;
     Function Find(const Name: String; ValueType: TSNVNamedValueType; out Index: Integer): Boolean; overload; virtual;
+    Function Exists(const Name: String): Boolean; overload; virtual;
+    Function Exists(const Name: String; ValueType: TSNVNamedValueType): Boolean; overload; virtual;
     Function Add(const Name: String; ValueType: TSNVNamedValueType): Integer; virtual;
     procedure Insert(Index: Integer; const Name: String; ValueType: TSNVNamedValueType); virtual;
     procedure Move(SrcIdx,DstIdx: Integer); virtual;
@@ -777,6 +779,20 @@ Function TSimpleNamedValues.Find(const Name: String; ValueType: TSNVNamedValueTy
 begin
 Index := IndexOf(Name,ValueType);
 Result := CheckIndex(Index);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TSimpleNamedValues.Exists(const Name: String): Boolean;
+begin
+Result := CheckIndex(IndexOf(Name));
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function TSimpleNamedValues.Exists(const Name: String; ValueType: TSNVNamedValueType): Boolean;
+begin
+Result := CheckIndex(IndexOf(Name,ValueType));
 end;
 
 //------------------------------------------------------------------------------
