@@ -45,9 +45,9 @@
       directly accessed using properties BufferValueMemory and BufferValueSize
       (both read-only).
 
-  Version 1.2 (2020-09-20)
+  Version 1.2.1 (2020-09-27)
 
-  Last change 2020-09-20
+  Last change 2020-09-27
 
   ©2020 František Milt
 
@@ -110,7 +110,7 @@ procedure FreeSNVBuffer(var Buffer: TSNVBuffer);
 
 type
   TSNVNamedValueType = (nvtBool,nvtInteger,nvtInt64,nvtFloat,nvtDateTime,
-                        nvtCurrency,nvtText,nvtPointer,nvtGUID,nvtBuffer);
+                        nvtCurrency,nvtString,nvtPointer,nvtGUID,nvtBuffer);
 
   TSNVNamedValue = record
     Name:     String;
@@ -122,7 +122,7 @@ type
       nvtFloat:    (FloatValue:     Extended);
       nvtDateTime: (DateTimeValue:  TDateTime);
       nvtCurrency: (CurrencyValue:  Currency);
-      nvtText:     (TextValue:      PChar);
+      nvtString:   (StringValue:    PChar);
       nvtPointer:  (PointerValue:   Pointer);
       nvtGUID:     (GUIDValue:      TGUID);
       nvtBuffer:   (BufferValue:    TSNVBuffer)
@@ -158,8 +158,8 @@ type
     procedure SetDateTimeValue(const Name: String; Value: TDateTime); virtual;
     Function GetCurrencyValue(const Name: String): Currency; virtual;
     procedure SetCurrencyValue(const Name: String; Value: Currency); virtual;
-    Function GetTextValue(const Name: String): String; virtual;
-    procedure SetTextValue(const Name: String; const Value: String); virtual;
+    Function GetStringValue(const Name: String): String; virtual;
+    procedure SetStringValue(const Name: String; const Value: String); virtual;
     Function GetPointerValue(const Name: String): Pointer; virtual;
     procedure SetPointerValue(const Name: String; Value: Pointer); virtual;
     Function GetGUIDValue(const Name: String): TGUID; virtual;
@@ -208,7 +208,7 @@ type
     property FloatValue[const Name: String]: Extended read GetFloatValue write SetFloatValue;
     property DateTimeValue[const Name: String]: TDateTime read GetDateTimeValue write SetDateTimeValue;
     property CurrencyValue[const Name: String]: Currency read GetCurrencyValue write SetCurrencyValue;
-    property TextValue[const Name: String]: String read GetTextValue write SetTextValue;
+    property StringValue[const Name: String]: String read GetStringValue write SetStringValue;
     property PointerValue[const Name: String]: Pointer read GetPointerValue write SetPointerValue;
     property GUIDValue[const Name: String]: TGUID read GetGUIDValue write SetGUIDValue;
     property BufferValue[const Name: String]: TSNVBuffer read GetBufferValue write SetBufferValue;
@@ -411,28 +411,28 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function TSimpleNamedValues.GetTextValue(const Name: String): String;
+Function TSimpleNamedValues.GetStringValue(const Name: String): String;
 var
   Index:  Integer;
 begin
-If Find(Name,nvtText,Index) then
-  Result := fValues[Index].TextValue
+If Find(Name,nvtString,Index) then
+  Result := fValues[Index].StringValue
 else
-  raise ESNVUnknownNamedValue.CreateFmt('TSimpleNamedValues.GetText: Unknown textual value "%s".',[Name]);
+  raise ESNVUnknownNamedValue.CreateFmt('TSimpleNamedValues.GetStringValue: Unknown textual value "%s".',[Name]);
 end;
 
 //------------------------------------------------------------------------------
 
-procedure TSimpleNamedValues.SetTextValue(const Name: String; const Value: String);
+procedure TSimpleNamedValues.SetStringValue(const Name: String; const Value: String);
 var
   Index:  Integer;
 begin
-Index := PrepareValue(Name,nvtText);
+Index := PrepareValue(Name,nvtString);
 with fValues[Index] do
   begin
-    If Assigned(TextValue) then
-      StrDispose(TextValue);
-    TextValue := StrNew(PChar(Value));
+    If Assigned(StringValue) then
+      StrDispose(StringValue);
+    StringValue := StrNew(PChar(Value));
   end;
 DoValueChange(Index);
 end;
@@ -663,10 +663,10 @@ end;
 class procedure TSimpleNamedValues.FinalizeNamedValue(var NamedValue: TSNVNamedValue);
 begin
 NamedValue.Name := '';
-If NamedValue.ValueType = nvtText then
+If NamedValue.ValueType = nvtString then
   begin
-    StrDispose(NamedValue.TextValue);
-    NamedValue.TextValue := nil;
+    StrDispose(NamedValue.StringValue);
+    NamedValue.StringValue := nil;
   end;
 If NamedValue.ValueType = nvtBuffer then
   FreeSNVBuffer(NamedValue.BufferValue);
