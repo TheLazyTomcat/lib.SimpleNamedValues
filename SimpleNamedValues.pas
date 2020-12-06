@@ -12,7 +12,8 @@
     This library provides a class that implements a list of name-value pairs.
 
     It is intended for passing data to objects or functions when the type and
-    amount of data cannot be known at compile-time. It is similar to passing
+    amount of data cannot be known at compile-time, or there is too many
+    arguments to be passed as function parameters. It is similar to passing
     an array of variants, but is more structured and reliable, as the data do
     not need to be ordered.
     It should NOT be used for long-term data storage or when the data are
@@ -20,16 +21,6 @@
 
     Only some basic types are implemented, but by using typecasting and dynamic
     memory allocation, practically any data can be stored.
-
-    Typical use should be following:
-
-      - create an instance of TSimpleNamedValues
-      - fill it with required data
-      - pass it to function/class that requires this data
-      - the function/class should copy the passed data to a local storage
-        and/or use them as needed
-      - upon return from the function/method, free the instance and with it the
-        data
 
     Note on type nvtBuffer (general memory buffers):
 
@@ -40,14 +31,42 @@
       free or otherwise invalidate the source.
       When retrieving this value type, again a copy is made and this copy is
       then returned. You have to free the returned buffer using function
-      FreeSNVBuffer after you are done using it.
+      FreeNamedValueBuffer after you are done using it.
       Internal storage of the buffer is managed automatically but can be
       directly accessed using properties BufferValueMemory and BufferValueSize
       (both read-only).
 
-  Version 1.2.1 (2020-09-27)
+    The named values list can be used in two ways - as a normal object instance,
+    where you are responsible for creation and destruction of the object, or
+    in mode in-here called transient instancing.
 
-  Last change 2020-09-27
+    Normal mode is clear enough, typical use should be:
+
+      - create an instance of TSimpleNamedValues
+      - fill it with required data (values)
+      - pass it to function/class that requires this data
+      - the function/class should copy the passed data to a local storage
+        and/or use them immediately
+      - after return from the function/method, free the instance and with it the
+        data
+
+    In transient instancing, the object is created internally by function
+    TransientNamedValues, containing values passed to this function, and
+    only special interface (ITransientSimpleNamedValues) is returned.
+    This interface is passed to a function/method requiring the data. This
+    function will use method Implementor, defined by the interface, to obtain
+    the actual named value list (object of type TSimpleNamedValues) and
+    continue to use this list the same way as in normal mode.
+    Since the implementor is reference counted, it will be, thanks to automatic
+    release of interfaces, freed after the function accepting the interface
+    exits (note that the destruction might not happed right after the exit, but
+    after all variables, including implicit/hidden ones, will go out of scope).
+    Therefore, in this mode, you are not responsible for managing instances of
+    the named value list.
+
+  Version 1.3 (2020-12-06)
+
+  Last change 2020-12-06
 
   ©2020 František Milt
 
@@ -72,7 +91,9 @@
 ===============================================================================}
 unit SimpleNamedValues;
 
-interface
+{$IF Defined(WINDOWS) or Defined(MSWINDOWS)}
+  {$DEFINE Windows}
+{$IFEND}
 
 {$IFDEF FPC}
   {$MODE ObjFPC}
@@ -80,6 +101,8 @@ interface
   {$MACRO ON}
 {$ENDIF}
 {$H+}
+
+interface
 
 uses
   SysUtils,
@@ -105,8 +128,10 @@ type
     Size:   TMemSize;
   end;
 
-Function SNVBuffer(Memory: Pointer; Size: TMemSize): TSNVBuffer;
-procedure FreeSNVBuffer(var Buffer: TSNVBuffer);
+Function NamedValueBuffer(Memory: Pointer; Size: TMemSize): TSNVBuffer;
+procedure FreeNamedValueBuffer(var Buffer: TSNVBuffer);
+
+//------------------------------------------------------------------------------
 
 type
   TSNVNamedValueType = (nvtBool,nvtInteger,nvtInt64,nvtFloat,nvtDateTime,
@@ -223,7 +248,65 @@ type
     property OnValueChangeCallback: TIntegerCallback read fOnValueChangeCallback write fOnValueChangeCallback;
   end;
 
+{===============================================================================
+--------------------------------------------------------------------------------
+                              Transient instancing
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    Transient instancing - declaration
+===============================================================================}
+const
+  IID_TransientSimpleNamedValues: TGUID = '{E0AD5430-0B30-49C6-8EBC-E28310DFF011}';
+
+type
+  ITransientSimpleNamedValues = interface(IInterface)
+  ['{E0AD5430-0B30-49C6-8EBC-E28310DFF011}']
+    Function Implementor: TSimpleNamedValues;
+  end;
+
+//------------------------------------------------------------------------------
+{
+  TSNVNamedValueContainer and following functions should only be used to pass
+  values to function TransientNamedValues, nowhere else.
+}
+type
+  TSNVNamedValueContainer = record
+    Name:         String;
+    StringValue:  String;
+    case ValueType: TSNVNamedValueType of
+      nvtBool:     (BoolValue:      Boolean);
+      nvtInteger:  (IntegerValue:   Integer);
+      nvtInt64:    (Int64Value:     Int64);
+      nvtFloat:    (FloatValue:     Extended);
+      nvtDateTime: (DateTimeValue:  TDateTime);
+      nvtCurrency: (CurrencyValue:  Currency);
+      nvtPointer:  (PointerValue:   Pointer);
+      nvtGUID:     (GUIDValue:      TGUID);
+      nvtBuffer:   (BufferValue:    TSNVBuffer)
+  end;
+
+Function BoolNamedValue(const Name: String; const Value: Boolean): TSNVNamedValueContainer;
+Function IntegerNamedValue(const Name: String; const Value: Integer): TSNVNamedValueContainer;
+Function Int64NamedValue(const Name: String; const Value: Int64): TSNVNamedValueContainer;
+Function FloatNamedValue(const Name: String; const Value: Extended): TSNVNamedValueContainer;
+Function DateTimeNamedValue(const Name: String; const Value: TDateTime): TSNVNamedValueContainer;
+Function CurrencyNamedValue(const Name: String; const Value: Currency): TSNVNamedValueContainer;
+Function StringNamedValue(const Name: String; const Value: String): TSNVNamedValueContainer;
+Function PointerNamedValue(const Name: String; const Value: Pointer): TSNVNamedValueContainer;
+Function GUIDNamedValue(const Name: String; const Value: TGUID): TSNVNamedValueContainer;
+Function BufferNamedValue(const Name: String; const Value: TSNVBuffer): TSNVNamedValueContainer;
+
+//------------------------------------------------------------------------------
+
+Function TransientNamedValues(const NamedValues: array of TSNVNamedValueContainer): ITransientSimpleNamedValues; overload;
+Function TransientNamedValues(const NamedValue: TSNVNamedValueContainer): ITransientSimpleNamedValues; overload;
+
+
 implementation
+
+uses
+  {$IF not Defined(FPC) and Defined(Windows)}Windows,{$IFEND} Variants;
 
 {$IFDEF FPC_DisableWarns}
   {$DEFINE FPCDWM}
@@ -239,7 +322,7 @@ implementation
     TSimpleNamedValues - auxiliary functions
 ===============================================================================}
 
-Function SNVBuffer(Memory: Pointer; Size: TMemSize): TSNVBuffer;
+Function NamedValueBuffer(Memory: Pointer; Size: TMemSize): TSNVBuffer;
 begin
 Result.Memory := Memory;
 Result.Size := Size;
@@ -247,7 +330,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure FreeSNVBuffer(var Buffer: TSNVBuffer);
+procedure FreeNamedValueBuffer(var Buffer: TSNVBuffer);
 begin
 FreeMem(Buffer.Memory,Buffer.Size);
 Buffer.Memory := nil;
@@ -509,7 +592,7 @@ Index := PrepareValue(Name,nvtBuffer);
 with fValues[Index] do
   begin
     If Assigned(BufferValue.Memory) then
-      FreeSNVBuffer(BufferValue);
+      FreeNamedValueBuffer(BufferValue);
     BufferValue.Size := Value.Size;
     GetMem(BufferValue.Memory,BufferValue.Size);
     System.Move(Value.Memory^,BufferValue.Memory^,BufferValue.Size);
@@ -669,7 +752,7 @@ If NamedValue.ValueType = nvtString then
     NamedValue.StringValue := nil;
   end;
 If NamedValue.ValueType = nvtBuffer then
-  FreeSNVBuffer(NamedValue.BufferValue);
+  FreeNamedValueBuffer(NamedValue.BufferValue);
 end;
 
 {-------------------------------------------------------------------------------
@@ -922,6 +1005,206 @@ For i := LowIndex to HighIndex do
 SetLength(fValues,0);
 fCount := 0;
 DoChange;
+end;
+
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                              Transient instancing
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    Transient instancing - transient class declaration
+===============================================================================}
+{
+  TTransientSimpleNamedValues implements only simplified reference counting,
+  but since the class is used only internally, it should suffice.
+}
+type
+  TTransientSimpleNamedValues = class(TSimpleNamedValues,ITransientSimpleNamedValues)
+  private
+    fRefCount:  Integer;
+  protected
+    // IInterface
+    Function QueryInterface({$IFDEF FPC}constref{$ELSE}const{$ENDIF} IID: TGUID; out Obj): HResult; virtual; {$IF Defined(FPC) and not Defined(Windows)}cdecl{$ELSE}stdcall{$IFEND};
+    Function _AddRef: Integer; virtual; {$IF Defined(FPC) and not Defined(Windows)}cdecl{$ELSE}stdcall{$IFEND};
+    Function _Release: Integer; virtual; {$IF Defined(FPC) and not Defined(Windows)}cdecl{$ELSE}stdcall{$IFEND};
+  public
+    constructor Create;
+    Function Implementor: TSimpleNamedValues; virtual;
+  end;
+
+{===============================================================================
+    Transient instancing - implementation
+===============================================================================}
+
+Function BoolNamedValue(const Name: String; const Value: Boolean): TSNVNamedValueContainer;
+begin
+Result.Name := Name;
+Result.ValueType := nvtBool;
+Result.BoolValue := Value;
+end;
+
+//------------------------------------------------------------------------------
+
+Function IntegerNamedValue(const Name: String; const Value: Integer): TSNVNamedValueContainer;
+begin
+Result.Name := Name;
+Result.ValueType := nvtInteger;
+Result.IntegerValue := Value;
+end;
+
+//------------------------------------------------------------------------------
+
+Function Int64NamedValue(const Name: String; const Value: Int64): TSNVNamedValueContainer;
+begin
+Result.Name := Name;
+Result.ValueType := nvtInt64;
+Result.Int64Value := Value;
+end;
+
+//------------------------------------------------------------------------------
+
+Function FloatNamedValue(const Name: String; const Value: Extended): TSNVNamedValueContainer;
+begin
+Result.Name := Name;
+Result.ValueType := nvtFloat;
+Result.FloatValue := Value;
+end;
+
+//------------------------------------------------------------------------------
+
+Function DateTimeNamedValue(const Name: String; const Value: TDateTime): TSNVNamedValueContainer;
+begin
+Result.Name := Name;
+Result.ValueType := nvtDateTime;
+Result.DateTimeValue := Value;
+end;
+
+//------------------------------------------------------------------------------
+
+Function CurrencyNamedValue(const Name: String; const Value: Currency): TSNVNamedValueContainer;
+begin
+Result.Name := Name;
+Result.ValueType := nvtCurrency;
+Result.CurrencyValue := Value;
+end;
+
+//------------------------------------------------------------------------------
+
+Function StringNamedValue(const Name: String; const Value: String): TSNVNamedValueContainer;
+begin
+Result.Name := Name;
+Result.ValueType := nvtString;
+Result.StringValue := Value;
+end;
+
+//------------------------------------------------------------------------------
+
+Function PointerNamedValue(const Name: String; const Value: Pointer): TSNVNamedValueContainer;
+begin
+Result.Name := Name;
+Result.ValueType := nvtPointer;
+Result.PointerValue := Value;
+end;
+
+//------------------------------------------------------------------------------
+
+Function GUIDNamedValue(const Name: String; const Value: TGUID): TSNVNamedValueContainer;
+begin
+Result.Name := Name;
+Result.ValueType := nvtGUID;
+Result.GUIDValue := Value;
+end;
+
+//------------------------------------------------------------------------------
+
+Function BufferNamedValue(const Name: String; const Value: TSNVBuffer): TSNVNamedValueContainer;
+begin
+Result.Name := Name;
+Result.ValueType := nvtBuffer;
+Result.BufferValue := Value;
+end;
+
+//------------------------------------------------------------------------------
+
+Function TransientNamedValues(const NamedValues: array of TSNVNamedValueContainer): ITransientSimpleNamedValues;
+var
+  List: TTransientSimpleNamedValues;
+  i:    Integer;
+begin
+List := TTransientSimpleNamedValues.Create;
+For i := Low(NamedValues) to High(NamedValues) do
+  case NamedValues[i].ValueType of
+    nvtBool:      List.BoolValue[NamedValues[i].Name] := NamedValues[i].BoolValue;
+    nvtInteger:   List.IntegerValue[NamedValues[i].Name] := NamedValues[i].IntegerValue;
+    nvtInt64:     List.Int64Value[NamedValues[i].Name] := NamedValues[i].Int64Value;
+    nvtFloat:     List.FloatValue[NamedValues[i].Name] := NamedValues[i].FloatValue;
+    nvtDateTime:  List.DateTimeValue[NamedValues[i].Name] := NamedValues[i].DateTimeValue;
+    nvtCurrency:  List.CurrencyValue[NamedValues[i].Name] := NamedValues[i].CurrencyValue;
+    nvtString:    List.StringValue[NamedValues[i].Name] := NamedValues[i].StringValue;
+    nvtPointer:   List.PointerValue[NamedValues[i].Name] := NamedValues[i].PointerValue;
+    nvtGUID:      List.GUIDValue[NamedValues[i].Name] := NamedValues[i].GUIDValue;
+    nvtBuffer:    List.BufferValue[NamedValues[i].Name] := NamedValues[i].BufferValue;
+  else
+    raise ESNVInvalidValue.CreateFmt('TransientNamedValues: Invalid value type (%d).',[Ord(NamedValues[i].ValueType)]);
+  end;
+Result := List;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function TransientNamedValues(const NamedValue: TSNVNamedValueContainer): ITransientSimpleNamedValues;
+begin
+Result := TransientNamedValues([NamedValue]);
+end;
+
+{===============================================================================
+    Transient instancing - transient class implementation
+===============================================================================}
+{-------------------------------------------------------------------------------
+    Transient instancing - protected methods
+-------------------------------------------------------------------------------}
+
+Function TTransientSimpleNamedValues.QueryInterface({$IFDEF FPC}constref{$ELSE}const{$ENDIF} IID: TGUID; out Obj): HResult; {$IF Defined(FPC) and not Defined(Windows)}cdecl{$ELSE}stdcall{$IFEND};
+begin
+If GetInterface(IID,Obj) then
+  Result := S_OK
+else
+  Result := E_NOINTERFACE;
+end;
+
+//------------------------------------------------------------------------------
+
+Function TTransientSimpleNamedValues._AddRef: Integer; {$IF Defined(FPC) and not Defined(Windows)}cdecl{$ELSE}stdcall{$IFEND};
+begin
+Result := InterlockedIncrement(fRefCount);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TTransientSimpleNamedValues._Release: Integer; {$IF Defined(FPC) and not Defined(Windows)}cdecl{$ELSE}stdcall{$IFEND};
+begin
+Result := InterlockedDecrement(fRefCount);
+If Result <= 0 then
+  Self.Free;
+end;
+
+{-------------------------------------------------------------------------------
+    Transient instancing - public methods
+-------------------------------------------------------------------------------}
+
+constructor TTransientSimpleNamedValues.Create;
+begin
+inherited;
+fRefCount := 0;
+end;
+
+//------------------------------------------------------------------------------
+
+Function TTransientSimpleNamedValues.Implementor: TSimpleNamedValues;
+begin
+Result := Self;
 end;
 
 end.
