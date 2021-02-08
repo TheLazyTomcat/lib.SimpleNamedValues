@@ -64,11 +64,11 @@
     Therefore, in this mode, you are not responsible for managing instances of
     the named value list.
 
-  Version 1.3 (2020-12-06)
+  Version 1.3.1 (2021-02-08)
 
-  Last change 2020-12-06
+  Last change 2021-02-08
 
-  ©2020 František Milt
+  ©2020-2021 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -302,6 +302,47 @@ Function BufferNamedValue(const Name: String; const Value: TSNVBuffer): TSNVName
 Function TransientNamedValues(const NamedValues: array of TSNVNamedValueContainer): ITransientSimpleNamedValues; overload;
 Function TransientNamedValues(const NamedValue: TSNVNamedValueContainer): ITransientSimpleNamedValues; overload;
 
+{===============================================================================
+--------------------------------------------------------------------------------
+                              Named values access
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    Named values access - declaration
+===============================================================================}
+{
+  Following functions are here to simplify access to named values.
+  Each function checks whether the NamedValues list is assigned. When it is,
+  it then checks existence of requested named value and, when found, assigns
+  its value to a passed variable.
+  If the value is assigned, the function returns true.
+  When the list is not assigned or the requested value is not present, the
+  function will return false and the passed variable is left unchanged (its
+  value is preserved).
+}
+
+Function GetNamedValue(NamedValues: TSimpleNamedValues; const Name: String; var Value: Boolean): Boolean; overload;
+Function GetNamedValue(NamedValues: TSimpleNamedValues; const Name: String; var Value: Integer): Boolean; overload;
+Function GetNamedValue(NamedValues: TSimpleNamedValues; const Name: String; var Value: Int64): Boolean; overload;
+Function GetNamedValue(NamedValues: TSimpleNamedValues; const Name: String; var Value: Extended): Boolean; overload;
+Function GetNamedValue(NamedValues: TSimpleNamedValues; const Name: String; var Value: TDateTime): Boolean; overload;
+Function GetNamedValue(NamedValues: TSimpleNamedValues; const Name: String; var Value: Currency): Boolean; overload;
+Function GetNamedValue(NamedValues: TSimpleNamedValues; const Name: String; var Value: String): Boolean; overload;
+Function GetNamedValue(NamedValues: TSimpleNamedValues; const Name: String; var Value: Pointer): Boolean; overload;
+Function GetNamedValue(NamedValues: TSimpleNamedValues; const Name: String; var Value: TGUID): Boolean; overload;
+Function GetNamedValue(NamedValues: TSimpleNamedValues; const Name: String; var Value: TSNVBuffer): Boolean; overload;
+
+Function GetIntegerNamedValue(NamedValues: TSimpleNamedValues; const Name: String; var Value: Int8): Boolean; overload;
+Function GetIntegerNamedValue(NamedValues: TSimpleNamedValues; const Name: String; var Value: UInt8): Boolean; overload;
+Function GetIntegerNamedValue(NamedValues: TSimpleNamedValues; const Name: String; var Value: Int16): Boolean; overload;
+Function GetIntegerNamedValue(NamedValues: TSimpleNamedValues; const Name: String; var Value: UInt16): Boolean; overload;
+Function GetIntegerNamedValue(NamedValues: TSimpleNamedValues; const Name: String; var Value: Int32): Boolean; overload;
+Function GetIntegerNamedValue(NamedValues: TSimpleNamedValues; const Name: String; var Value: UInt32): Boolean; overload;
+Function GetIntegerNamedValue(NamedValues: TSimpleNamedValues; const Name: String; var Value: Int64): Boolean; overload;
+Function GetIntegerNamedValue(NamedValues: TSimpleNamedValues; const Name: String; var Value: UInt64): Boolean; overload;
+
+Function GetFloatNamedValue(NamedValues: TSimpleNamedValues; const Name: String; var Value: Single): Boolean; overload;
+Function GetFloatNamedValue(NamedValues: TSimpleNamedValues; const Name: String; var Value: Double): Boolean; overload;
 
 implementation
 
@@ -1205,6 +1246,293 @@ end;
 Function TTransientSimpleNamedValues.Implementor: TSimpleNamedValues;
 begin
 Result := Self;
+end;
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                              Named values access
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    Named values access - implementation
+===============================================================================}
+
+Function GetNamedValue(NamedValues: TSimpleNamedValues; const Name: String; var Value: Boolean): Boolean;
+begin
+If Assigned(NamedValues) then
+  begin
+    If NamedValues.Exists(Name,nvtBool) then
+      begin
+        Value := NamedValues.BoolValue[Name];
+        Result := True;
+      end
+    else Result := False;
+  end
+else Result := False;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GetNamedValue(NamedValues: TSimpleNamedValues; const Name: String; var Value: Integer): Boolean;
+begin
+If Assigned(NamedValues) then
+  begin
+    If NamedValues.Exists(Name,nvtInteger) then
+      begin
+        Value := NamedValues.IntegerValue[Name];
+        Result := True;
+      end
+    else Result := False;
+  end
+else Result := False;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GetNamedValue(NamedValues: TSimpleNamedValues; const Name: String; var Value: Int64): Boolean;
+begin
+If Assigned(NamedValues) then
+  begin
+    If NamedValues.Exists(Name,nvtInt64) then
+      begin
+        Value := NamedValues.Int64Value[Name];
+        Result := True;
+      end
+    else Result := False;
+  end
+else Result := False;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GetNamedValue(NamedValues: TSimpleNamedValues; const Name: String; var Value: Extended): Boolean;
+begin
+If Assigned(NamedValues) then
+  begin
+    If NamedValues.Exists(Name,nvtFloat) then
+      begin
+        Value := NamedValues.FloatValue[Name];
+        Result := True;
+      end
+    else Result := False;
+  end
+else Result := False;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GetNamedValue(NamedValues: TSimpleNamedValues; const Name: String; var Value: TDateTime): Boolean;
+begin
+If Assigned(NamedValues) then
+  begin
+    If NamedValues.Exists(Name,nvtDateTime) then
+      begin
+        Value := NamedValues.DateTimeValue[Name];
+        Result := True;
+      end
+    else Result := False;
+  end
+else Result := False;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GetNamedValue(NamedValues: TSimpleNamedValues; const Name: String; var Value: Currency): Boolean;
+begin
+If Assigned(NamedValues) then
+  begin
+    If NamedValues.Exists(Name,nvtCurrency) then
+      begin
+        Value := NamedValues.CurrencyValue[Name];
+        Result := True;
+      end
+    else Result := False;
+  end
+else Result := False;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GetNamedValue(NamedValues: TSimpleNamedValues; const Name: String; var Value: String): Boolean;
+begin
+If Assigned(NamedValues) then
+  begin
+    If NamedValues.Exists(Name,nvtString) then
+      begin
+        Value := NamedValues.StringValue[Name];
+        Result := True;
+      end
+    else Result := False;
+  end
+else Result := False;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GetNamedValue(NamedValues: TSimpleNamedValues; const Name: String; var Value: Pointer): Boolean;
+begin
+If Assigned(NamedValues) then
+  begin
+    If NamedValues.Exists(Name,nvtPointer) then
+      begin
+        Value := NamedValues.PointerValue[Name];
+        Result := True;
+      end
+    else Result := False;
+  end
+else Result := False;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GetNamedValue(NamedValues: TSimpleNamedValues; const Name: String; var Value: TGUID): Boolean;
+begin
+If Assigned(NamedValues) then
+  begin
+    If NamedValues.Exists(Name,nvtGUID) then
+      begin
+        Value := NamedValues.GUIDValue[Name];
+        Result := True;
+      end
+    else Result := False;
+  end
+else Result := False;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GetNamedValue(NamedValues: TSimpleNamedValues; const Name: String; var Value: TSNVBuffer): Boolean;
+begin
+If Assigned(NamedValues) then
+  begin
+    If NamedValues.Exists(Name,nvtBuffer) then
+      begin
+        Value := NamedValues.BufferValue[Name];
+        Result := True;
+      end
+    else Result := False;
+  end
+else Result := False;
+end;
+
+//------------------------------------------------------------------------------
+
+Function GetIntegerNamedValue(NamedValues: TSimpleNamedValues; const Name: String; var Value: Int8): Boolean;
+var
+  Temp: Integer;
+begin
+Temp := 0;
+Result := GetNamedValue(NamedValues,Name,Temp);
+If Result then
+  Value := Int8(Temp);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GetIntegerNamedValue(NamedValues: TSimpleNamedValues; const Name: String; var Value: UInt8): Boolean;
+var
+  Temp: Integer;
+begin
+Temp := 0;
+Result := GetNamedValue(NamedValues,Name,Temp);
+If Result then
+  Value := UInt8(Temp);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GetIntegerNamedValue(NamedValues: TSimpleNamedValues; const Name: String; var Value: Int16): Boolean;
+var
+  Temp: Integer;
+begin
+Temp := 0;
+Result := GetNamedValue(NamedValues,Name,Temp);
+If Result then
+  Value := Int16(Temp);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GetIntegerNamedValue(NamedValues: TSimpleNamedValues; const Name: String; var Value: UInt16): Boolean;
+var
+  Temp: Integer;
+begin
+Temp := 0;
+Result := GetNamedValue(NamedValues,Name,Temp);
+If Result then
+  Value := UInt16(Temp);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GetIntegerNamedValue(NamedValues: TSimpleNamedValues; const Name: String; var Value: Int32): Boolean;
+var
+  Temp: Integer;
+begin
+Temp := 0;
+Result := GetNamedValue(NamedValues,Name,Temp);
+If Result then
+  Value := Int32(Temp);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GetIntegerNamedValue(NamedValues: TSimpleNamedValues; const Name: String; var Value: UInt32): Boolean;
+var
+  Temp: Integer;
+begin
+Temp := 0;
+Result := GetNamedValue(NamedValues,Name,Temp);
+If Result then
+  Value := UInt32(Temp);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GetIntegerNamedValue(NamedValues: TSimpleNamedValues; const Name: String; var Value: Int64): Boolean;
+var
+  Temp: Integer;
+begin
+Temp := 0;
+Result := GetNamedValue(NamedValues,Name,Temp);
+If Result then
+  Value := Int64(Temp);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GetIntegerNamedValue(NamedValues: TSimpleNamedValues; const Name: String; var Value: UInt64): Boolean;
+var
+  Temp: Integer;
+begin
+Temp := 0;
+Result := GetNamedValue(NamedValues,Name,Temp);
+If Result then
+  Value := UInt64(Temp);
+end;
+
+//------------------------------------------------------------------------------
+
+Function GetFloatNamedValue(NamedValues: TSimpleNamedValues; const Name: String; var Value: Single): Boolean;
+var
+  Temp: Extended;
+begin
+Temp := 0.0;
+Result := GetNamedValue(NamedValues,Name,Temp);
+If Result then
+  Value := Temp;
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function GetFloatNamedValue(NamedValues: TSimpleNamedValues; const Name: String; var Value: Double): Boolean;
+var
+  Temp: Extended;
+begin
+Temp := 0.0;
+Result := GetNamedValue(NamedValues,Name,Temp);
+If Result then
+  Value := Temp;
 end;
 
 end.
