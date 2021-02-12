@@ -64,9 +64,9 @@
     Therefore, in this mode, you are not responsible for managing instances of
     the named value list.
 
-  Version 1.3.1 (2021-02-08)
+  Version 1.3.2 (2021-02-12)
 
-  Last change 2021-02-08
+  Last change 2021-02-12
 
   ©2020-2021 František Milt
 
@@ -1071,8 +1071,10 @@ type
     Function _AddRef: Integer; virtual; {$IF Defined(FPC) and not Defined(Windows)}cdecl{$ELSE}stdcall{$IFEND};
     Function _Release: Integer; virtual; {$IF Defined(FPC) and not Defined(Windows)}cdecl{$ELSE}stdcall{$IFEND};
   public
-    constructor Create;
-    Function Implementor: TSimpleNamedValues; virtual;
+    class Function NewInstance: TObject; override;
+    procedure AfterConstruction; override;
+    procedure BeforeDestruction; override;
+    Function Implementor: TSimpleNamedValues; virtual; 
   end;
 
 {===============================================================================
@@ -1235,10 +1237,28 @@ end;
     Transient instancing - public methods
 -------------------------------------------------------------------------------}
 
-constructor TTransientSimpleNamedValues.Create;
+class Function TTransientSimpleNamedValues.NewInstance: TObject;
+begin
+Result := inherited NewInstance;
+If Assigned(Result) then
+  TTransientSimpleNamedValues(Result).fRefCount := 1;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TTransientSimpleNamedValues.AfterConstruction;
 begin
 inherited;
-fRefCount := 0;
+InterlockedDecrement(fRefCount);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TTransientSimpleNamedValues.BeforeDestruction;
+begin
+If fRefCount <> 0 then
+  raise ESNVInvalidValue.CreateFmt('TTransientSimpleNamedValues.BeforeDestruction: Invalid reference count (%d).',[fRefCount]);
+inherited;
 end;
 
 //------------------------------------------------------------------------------
