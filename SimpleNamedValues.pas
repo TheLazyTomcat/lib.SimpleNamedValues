@@ -64,9 +64,9 @@
     Therefore, in this mode, you are not responsible for managing instances of
     the named value list.
 
-  Version 1.3.2 (2021-02-12)
+  Version 1.3.3 (2021-03-17)
 
-  Last change 2021-02-12
+  Last change 2021-03-17
 
   ©2020-2021 František Milt
 
@@ -116,6 +116,7 @@ type
   ESNVUnknownNamedValue = class(ESNVException);
   ESNVValueTypeMismatch = class(ESNVException);
   ESNVDuplicitValue     = class(ESNVException);
+  ESNVInvalidValueType  = class(ESNVException);
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -218,7 +219,8 @@ type
     Function Find(const Name: String; ValueType: TSNVNamedValueType; out Index: Integer): Boolean; overload; virtual;
     Function Exists(const Name: String): Boolean; overload; virtual;
     Function Exists(const Name: String; ValueType: TSNVNamedValueType): Boolean; overload; virtual;
-    Function Add(const Name: String; ValueType: TSNVNamedValueType): Integer; virtual;
+    Function Add(const Name: String; ValueType: TSNVNamedValueType): Integer; overload; virtual;
+    procedure Add(Values: TSimpleNamedValues); overload; virtual;
     procedure Insert(Index: Integer; const Name: String; ValueType: TSNVNamedValueType); virtual;
     procedure Move(SrcIdx,DstIdx: Integer); virtual;
     procedure Exchange(Idx1,Idx2: Integer); virtual;
@@ -934,6 +936,45 @@ If not Find(Name,Result) then
     DoChange;
   end
 else raise ESNVDuplicitValue.CreateFmt('TSimpleNamedValues.Add: Value "%s" already exists.',[Name]);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSimpleNamedValues.Add(Values: TSimpleNamedValues);
+var
+  i:      Integer;
+  Index:  Integer;
+begin
+// first check for duplicitites
+For i := Values.LowIndex to Values.HighIndex do
+  If Find(Values[i].Name,Index) then
+    raise ESNVDuplicitValue.CreateFmt('TSimpleNamedValues.Add: Value "%s" already exists.',[Values[i].Name]);
+// add values
+For i := Values.LowIndex to Values.HighIndex do
+  begin
+    Index := Add(Values[i].Name,Values[i].ValueType);
+    If CheckIndex(Index) then
+      case fValues[Index].ValueType of
+        nvtBool:      fValues[Index].BoolValue := Values[i].BoolValue;
+        nvtInteger:   fValues[Index].IntegerValue := Values[i].IntegerValue;
+        nvtInt64:     fValues[Index].Int64Value := Values[i].Int64Value;
+        nvtFloat:     fValues[Index].FloatValue := Values[i].FloatValue;
+        nvtDateTime:  fValues[Index].DateTimeValue := Values[i].DateTimeValue;
+        nvtCurrency:  fValues[Index].CurrencyValue := Values[i].CurrencyValue;
+        nvtString:    fValues[Index].StringValue := StrNew(PChar(Values[i].StringValue));
+        nvtPointer:   fValues[Index].PointerValue := Values[i].PointerValue;
+        nvtGUID:      fValues[Index].GUIDValue := Values[i].GUIDValue;
+        nvtBuffer:    begin
+                        fValues[Index].BufferValue.Size := Values[i].BufferValue.Size;
+                        GetMem(fValues[Index].BufferValue.Memory,fValues[Index].BufferValue.Size);
+                        System.Move(Values[i].BufferValue.Memory^,
+                                    fValues[Index].BufferValue.Memory^,
+                                    fValues[Index].BufferValue.Size);
+                      end;
+      else
+        raise ESNVInvalidValueType.CreateFmt('TSimpleNamedValues.Add: Invalid value type (%d).',[Ord(fValues[Index].ValueType)]);
+      end;
+  end;
 end;
 
 //------------------------------------------------------------------------------
