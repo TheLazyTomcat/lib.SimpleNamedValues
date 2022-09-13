@@ -66,9 +66,9 @@
 
   Version 1.3.3 (2021-03-17)
 
-  Last change 2021-03-17
+  Last change 2022-09-14
 
-  ©2020-2021 František Milt
+  ©2020-2022 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -108,6 +108,9 @@ uses
   SysUtils,
   AuxTypes, AuxClasses;
 
+{===============================================================================
+    Library-specific exceptions
+===============================================================================}
 type
   ESNVException = class(Exception);
 
@@ -159,7 +162,7 @@ type
 ===============================================================================}
 type
   TSimpleNamedValues = class(TCustomListObject)
-  private
+  protected
     fValues:                array of TSNVNamedValue;
     fCount:                 Integer;
     fUpdateCounter:         Integer;
@@ -169,8 +172,7 @@ type
     fOnValueChangeEvent:    TIntegerEvent;
     fOnValueChangeCallback: TIntegerCallback;
     // getters/setters
-    Function GetValue(Index: Integer): TSNVNamedValue;
-  protected
+    Function GetValue(Index: Integer): TSNVNamedValue; virtual;
     // value getters/setters
     Function GetBoolValue(const Name: String): Boolean; virtual;
     procedure SetBoolValue(const Name: String; Value: Boolean); virtual;
@@ -384,7 +386,7 @@ end;
     TSimpleNamedValues - class implementation
 ===============================================================================}
 {-------------------------------------------------------------------------------
-    TSimpleNamedValues - private methods
+    TSimpleNamedValues - protected methods
 -------------------------------------------------------------------------------}
 
 Function TSimpleNamedValues.GetValue(Index: Integer): TSNVNamedValue;
@@ -395,9 +397,7 @@ else
   raise ESNVIndexOutOfBounds.CreateFmt('TSimpleNamedValues.GetValue: Index (%d) out of bounds.',[Index]);
 end;
 
-{-------------------------------------------------------------------------------
-    TSimpleNamedValues - protected methods
--------------------------------------------------------------------------------}
+//------------------------------------------------------------------------------
 
 Function TSimpleNamedValues.GetBoolValue(const Name: String): Boolean;
 var
@@ -722,8 +722,8 @@ fChanged := True;
 If fUpdateCounter <= 0 then
   begin
     If Assigned(fOnChangeEvent) then
-      fOnChangeEvent(Self);
-    If Assigned(fOnChangeCallback) then
+      fOnChangeEvent(Self)
+    else If Assigned(fOnChangeCallback) then
       fOnChangeCallback(Self);
   end
 end;
@@ -739,8 +739,8 @@ If CheckIndex(Index) then
     If fUpdateCounter <= 0 then
       begin
         If Assigned(fOnValueChangeEvent) then
-          fOnValueChangeEvent(Self,Index);
-        If Assigned(fOnValueChangeCallback) then
+          fOnValueChangeEvent(Self,Index)
+        else If Assigned(fOnValueChangeCallback) then
           fOnValueChangeCallback(Self,Index);
       end
     else fValues[Index].Changed := True;
